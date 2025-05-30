@@ -11,6 +11,7 @@ set(THIS_PACKAGE_DEPS
     behaviortree_cpp
     btcpp_ros2_interfaces
     generate_parameter_library
+    std_srvs
     )
 
 find_package(ament_cmake REQUIRED)
