@@ -40,6 +40,10 @@ struct TreeExecutionServer::Pimpl
   rclcpp_action::Server<ExecuteTree>::SharedPtr action_server;
   std::thread action_thread;
 
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr pause_service;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr resume_service;
+  bool paused = false;
+
   std::shared_ptr<bt_server::ParamListener> param_listener;
   bt_server::Params params;
 
@@ -76,6 +80,16 @@ TreeExecutionServer::TreeExecutionServer(const rclcpp::Node::SharedPtr& node)
       },
       [this](const std::shared_ptr<GoalHandleExecuteTree> goal_handle) {
         handle_accepted(std::move(goal_handle));
+      });
+
+  p_->pause_service = node_->create_service<Trigger>(
+      "pause_tree_execution",
+      [this](Trigger::Request::ConstSharedPtr request,
+             Trigger::Response::SharedPtr response) { handle_pause(request, response); });
+  p_->resume_service = node_->create_service<Trigger>(
+      "resume_tree_execution", [this](Trigger::Request::ConstSharedPtr request,
+                                      Trigger::Response::SharedPtr response) {
+        handle_resume(request, response);
       });
 
   // we use a wall timer to run asynchronously executeRegistration();
@@ -157,6 +171,7 @@ void TreeExecutionServer::handle_accepted(
   {
     p_->action_thread.join();
   }
+  p_->paused = false;
   // To avoid blocking the executor start a new thread to process the goal
   p_->action_thread = std::thread{ [=]() { execute(goal_handle); } };
 }
@@ -222,8 +237,16 @@ void TreeExecutionServer::execute(
         return;
       }
 
-      // tick the tree once and publish the action feedback
-      status = p_->tree.tickExactlyOnce();
+      // tick the tree once (if not paused) and publish the action feedback
+      if(p_->paused)
+      {
+        status = BT::NodeStatus::RUNNING;
+        RCLCPP_DEBUG(kLogger, "Action Server is paused, skipping tick.");
+      }
+      else
+      {
+        status = p_->tree.tickExactlyOnce();
+      }
 
       if(const auto res = onLoopAfterTick(status); res.has_value())
       {
@@ -232,7 +255,13 @@ void TreeExecutionServer::execute(
         return;
       }
 
-      if(const auto res = onLoopFeedback(); res.has_value())
+      if(p_->paused)
+      {
+        auto feedback = std::make_shared<ExecuteTree::Feedback>();
+        feedback->message = "Tree execution paused.";
+        goal_handle->publish_feedback(feedback);
+      }
+      else if(const auto res = onLoopFeedback(); res.has_value())
       {
         auto feedback = std::make_shared<ExecuteTree::Feedback>();
         feedback->message = res.value();
@@ -282,6 +311,20 @@ void TreeExecutionServer::execute(
     RCLCPP_ERROR(kLogger, action_result->return_message.c_str());
     goal_handle->abort(action_result);
   }
+}
+
+void TreeExecutionServer::handle_pause(Trigger::Request::ConstSharedPtr /*request*/,
+                                       Trigger::Response::SharedPtr response)
+{
+  p_->paused = true;
+  response->success = true;
+}
+
+void TreeExecutionServer::handle_resume(Trigger::Request::ConstSharedPtr /*request*/,
+                                        Trigger::Response::SharedPtr response)
+{
+  p_->paused = false;
+  response->success = true;
 }
 
 const std::string& TreeExecutionServer::treeName() const

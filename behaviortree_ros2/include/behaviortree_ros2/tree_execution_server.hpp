@@ -21,6 +21,8 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 
+#include "std_srvs/srv/trigger.hpp"
+
 namespace BT
 {
 
@@ -35,6 +37,7 @@ class TreeExecutionServer
 public:
   using ExecuteTree = btcpp_ros2_interfaces::action::ExecuteTree;
   using GoalHandleExecuteTree = rclcpp_action::ServerGoalHandle<ExecuteTree>;
+  using Trigger = std_srvs::srv::Trigger;
 
   /**
    * @brief Constructor that will create its own instance of rclcpp::Node
@@ -187,6 +190,22 @@ private:
    * @param goal_handle Server goal handle to process feedback and set the response when finished
    */
   void execute(const std::shared_ptr<GoalHandleExecuteTree> goal_handle);
+
+  /**
+   * @brief Handle the pause service request
+   * @param request The request to pause the action server
+   * @param response The response to the pause request
+   */
+  void handle_pause(Trigger::Request::ConstSharedPtr request,
+                    Trigger::Response::SharedPtr response);
+
+  /**
+   * @brief Handle the resume service request
+   * @param request The request to resume the action server
+   * @param response The response to the resume request
+   */
+  void handle_resume(Trigger::Request::ConstSharedPtr request,
+                     Trigger::Response::SharedPtr response);
 };
 
 }  // namespace BT

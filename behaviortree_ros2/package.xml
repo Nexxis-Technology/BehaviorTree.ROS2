@@ -2,7 +2,7 @@
   <name>behaviortree_ros2</name>
   <version>0.2.0</version>
   <description>
-  This package provides a ROS2 wrapper, on top of BehaviorTree.CPP.
+    This package provides a ROS2 wrapper, on top of BehaviorTree.CPP.
   </description>
 
   <maintainer email="davide.faconti@gmail.com">Davide Faconti</maintainer>
@@ -19,9 +19,10 @@
   <depend>behaviortree_cpp</depend>
   <depend>generate_parameter_library</depend>
   <depend>btcpp_ros2_interfaces</depend>
+  <depend>std_srvs</depend>
 
-<export>
-  <build_type>ament_cmake</build_type>
-</export>
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 
 </package>
