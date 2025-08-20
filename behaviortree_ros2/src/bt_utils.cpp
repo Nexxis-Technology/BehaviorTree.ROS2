@@ -88,8 +88,8 @@ std::filesystem::path GetDirectoryPath(const std::string& parameter_value)
 void LoadBehaviorTrees(BT::BehaviorTreeFactory& factory,
                        const std::filesystem::path& directory_path)
 {
-  using std::filesystem::directory_iterator;
-  for(const auto& entry : directory_iterator(directory_path))
+  using std::filesystem::recursive_directory_iterator;
+  for(const auto& entry : recursive_directory_iterator(directory_path))
   {
     if(entry.path().extension() == ".xml")
     {
@@ -157,8 +157,8 @@ void RegisterPlugins(bt_server::Params& params, BT::BehaviorTreeFactory& factory
       continue;
     }
 
-    using std::filesystem::directory_iterator;
-    for(const auto& entry : directory_iterator(plugin_directory))
+    using std::filesystem::recursive_directory_iterator;
+    for(const auto& entry : recursive_directory_iterator(plugin_directory))
     {
       if(entry.path().extension() == ".so")
       {
