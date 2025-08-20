@@ -89,7 +89,9 @@ void LoadBehaviorTrees(BT::BehaviorTreeFactory& factory,
                        const std::filesystem::path& directory_path)
 {
   using std::filesystem::recursive_directory_iterator;
-  for(const auto& entry : recursive_directory_iterator(directory_path))
+  const auto directory_options =
+      std::filesystem::directory_options::follow_directory_symlink;
+  for(const auto& entry : recursive_directory_iterator(directory_path, directory_options))
   {
     if(entry.path().extension() == ".xml")
     {
