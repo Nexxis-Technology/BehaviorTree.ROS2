@@ -14,6 +14,7 @@
 #include <functional>
 #include <memory>
 #include <thread>
+#include <filesystem>
 
 #include "btcpp_ros2_interfaces/msg/node_status.hpp"
 
@@ -43,7 +44,7 @@ btcpp_ros2_interfaces::msg::NodeStatus ConvertNodeStatus(BT::NodeStatus& status)
  * @param parameter_value String containing 'package_name/subfolder' for the directory path to look up
  * @return Full path to the directory specified by the parameter_value
  */
-std::string GetDirectoryPath(const std::string& parameter_value);
+std::filesystem::path GetDirectoryPath(const std::string& parameter_value);
 
 /**
  * @brief Function to load BehaviorTree xml files from a specific directory
@@ -52,7 +53,7 @@ std::string GetDirectoryPath(const std::string& parameter_value);
  * @param directory_path Full path to the directory to search for BehaviorTree definitions
  */
 void LoadBehaviorTrees(BT::BehaviorTreeFactory& factory,
-                       const std::string& directory_path);
+                       const std::filesystem::path& directory_path);
 
 /**
  * @brief Function to load a BehaviorTree ROS plugin (or standard BT.CPP plugins)
