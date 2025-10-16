@@ -93,6 +93,12 @@ void LoadBehaviorTrees(BT::BehaviorTreeFactory& factory,
       std::filesystem::directory_options::follow_directory_symlink;
   for(const auto& entry : recursive_directory_iterator(directory_path, directory_options))
   {
+    if(entry.is_symlink() && !entry.exists())
+    {
+      RCLCPP_DEBUG(kLogger, "Skipping broken symlink: %s", entry.path().c_str());
+      continue;
+    }
+
     if(entry.path().extension() == ".xml")
     {
       try
