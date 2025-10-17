@@ -200,16 +200,23 @@ void RegisterPlugins(bt_server::Params& params, BT::BehaviorTreeFactory& factory
     {
       continue;
     }
-
     RCLCPP_DEBUG(kLogger, "Searching recursively for plugins in path: '%s'",
                  plugin_directory.c_str());
-    using std::filesystem::recursive_directory_iterator;
-    for(const auto& entry : recursive_directory_iterator(plugin_directory))
+    try
     {
-      if(entry.path().extension() == ".so")
+      using std::filesystem::recursive_directory_iterator;
+      for(const auto& entry : recursive_directory_iterator(plugin_directory))
       {
-        LoadPlugin(factory, entry.path(), ros_params);
+        if(entry.path().extension() == ".so")
+        {
+          LoadPlugin(factory, entry.path(), ros_params);
+        }
       }
+    }
+    catch(const std::exception& e)
+    {
+      RCLCPP_ERROR(kLogger, "Failed to load plugins from '%s': %s",
+                   plugin_directory.c_str(), e.what());
     }
   }
 }
@@ -223,7 +230,15 @@ void RegisterBehaviorTrees(bt_server::Params& params, BT::BehaviorTreeFactory& f
     // skip invalid subtree directories
     if(tree_directory.empty())
       continue;
-    LoadBehaviorTrees(factory, tree_directory);
+    try
+    {
+      LoadBehaviorTrees(factory, tree_directory);
+    }
+    catch(const std::exception& e)
+    {
+      RCLCPP_ERROR(kLogger, "Failed to load BehaviorTrees from '%s': %s",
+                   tree_directory.c_str(), e.what());
+    }
   }
 }
 
