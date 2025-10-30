@@ -22,6 +22,12 @@ static const auto kLogger = rclcpp::get_logger("bt_action_server");
 namespace BT
 {
 
+std::filesystem::path path_from_iterators(const std::filesystem::path::iterator& first,
+                                          const std::filesystem::path::iterator& last)
+{
+  return std::accumulate(first, last, std::filesystem::path{}, std::divides{});
+}
+
 btcpp_ros2_interfaces::msg::NodeStatus ConvertNodeStatus(BT::NodeStatus& status)
 {
   btcpp_ros2_interfaces::msg::NodeStatus action_status;
@@ -47,23 +53,26 @@ btcpp_ros2_interfaces::msg::NodeStatus ConvertNodeStatus(BT::NodeStatus& status)
   return action_status;
 }
 
-std::string GetDirectoryPath(const std::string& parameter_value)
+std::filesystem::path GetDirectoryPath(const std::string& parameter_value)
 {
-  std::string package_name, subfolder;
-  auto pos = parameter_value.find_first_of("/");
-  if(pos == parameter_value.size())
+  const std::filesystem::path search_path(parameter_value);
+  const auto num_path_components = std::distance(search_path.begin(), search_path.end());
+
+  if(num_path_components < 2)
   {
     RCLCPP_ERROR(kLogger, "Invalid Parameter: %s. Missing subfolder delimiter '/'.",
                  parameter_value.c_str());
     return "";
   }
 
-  package_name = std::string(parameter_value.begin(), parameter_value.begin() + pos);
-  subfolder = std::string(parameter_value.begin() + pos + 1, parameter_value.end());
+  const auto package_name = *search_path.begin();
+  const auto subfolder = path_from_iterators(++search_path.begin(), search_path.end());
+
   try
   {
-    std::string search_directory =
-        ament_index_cpp::get_package_share_directory(package_name) + "/" + subfolder;
+    const auto package_share_dir =
+        std::filesystem::path(ament_index_cpp::get_package_share_directory(package_name));
+    const auto search_directory = package_share_dir / subfolder;
     RCLCPP_DEBUG(kLogger, "Searching for Plugins/BehaviorTrees in path: %s",
                  search_directory.c_str());
     return search_directory;
@@ -73,15 +82,23 @@ std::string GetDirectoryPath(const std::string& parameter_value)
     RCLCPP_ERROR(kLogger, "Failed to find package: %s \n %s", package_name.c_str(),
                  e.what());
   }
-  return "";
+  return {};
 }
 
 void LoadBehaviorTrees(BT::BehaviorTreeFactory& factory,
-                       const std::string& directory_path)
+                       const std::filesystem::path& directory_path)
 {
-  using std::filesystem::directory_iterator;
-  for(const auto& entry : directory_iterator(directory_path))
+  using std::filesystem::recursive_directory_iterator;
+  const auto directory_options =
+      std::filesystem::directory_options::follow_directory_symlink;
+  for(const auto& entry : recursive_directory_iterator(directory_path, directory_options))
   {
+    if(entry.is_symlink() && !entry.exists())
+    {
+      RCLCPP_DEBUG(kLogger, "Skipping broken symlink: %s", entry.path().c_str());
+      continue;
+    }
+
     if(entry.path().extension() == ".xml")
     {
       try
@@ -147,9 +164,9 @@ void RegisterPlugins(bt_server::Params& params, BT::BehaviorTreeFactory& factory
     {
       continue;
     }
-    using std::filesystem::directory_iterator;
 
-    for(const auto& entry : directory_iterator(plugin_directory))
+    using std::filesystem::recursive_directory_iterator;
+    for(const auto& entry : recursive_directory_iterator(plugin_directory))
     {
       if(entry.path().extension() == ".so")
       {
