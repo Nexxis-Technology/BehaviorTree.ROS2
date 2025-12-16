@@ -70,10 +70,13 @@ std::filesystem::path GetDirectoryPath(const std::string& url)
   }
   else
   {
-    RCLCPP_ERROR(kLogger,
-                 "Invalid URL format: '%s'. Must start with either of ['%s', '%s'].",
-                 url.c_str(), package_prefix.c_str(), file_prefix.c_str());
-    return {};
+    // Interpret unprefixed paths as package paths for backwards compatibility
+    RCLCPP_WARN(kLogger,
+                "Invalid URL format: '%s'. Must start with either of ['%s', '%s']. Will "
+                "interpret as a package path.",
+                url.c_str(), package_prefix.c_str(), file_prefix.c_str());
+
+    return GetDirectoryPathFromPackage(url);
   }
 }
 
