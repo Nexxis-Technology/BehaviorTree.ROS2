@@ -100,6 +100,8 @@ std::filesystem::path GetDirectoryPathFromPackage(const std::string& package_pat
     const auto package_share_dir =
         std::filesystem::path(ament_index_cpp::get_package_share_directory(package_name));
     const auto search_directory = package_share_dir / subfolder;
+    RCLCPP_DEBUG(kLogger, "Searching for Plugins/BehaviorTrees in path: %s",
+                 search_directory.c_str());
     return search_directory;
   }
   catch(const std::exception& e)
