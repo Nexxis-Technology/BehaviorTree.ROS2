@@ -72,8 +72,8 @@ std::filesystem::path GetDirectoryPath(const std::string& url)
   {
     // Interpret unprefixed paths as package paths for backwards compatibility
     RCLCPP_WARN(kLogger,
-                "Invalid URL format: '%s'. Must start with either of ['%s', '%s']. Will "
-                "interpret as a package path.",
+                "Invalid/deprecated URL format: '%s'. Must start with either of ['%s', "
+                "'%s']. Will try to interpret as a package path.",
                 url.c_str(), package_prefix.c_str(), file_prefix.c_str());
 
     return GetDirectoryPathFromPackage(url);
