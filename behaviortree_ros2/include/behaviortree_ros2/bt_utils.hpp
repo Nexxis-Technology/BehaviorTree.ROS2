@@ -39,12 +39,33 @@ namespace BT
 btcpp_ros2_interfaces::msg::NodeStatus ConvertNodeStatus(BT::NodeStatus& status);
 
 /**
- * @brief Function the uses ament_index_cpp to get the package path of the parameter specified by the user
+ * @brief Resolve directory path from parameter value. Differentiates between the following formats:
  *
- * @param parameter_value String containing 'package_name/subfolder' for the directory path to look up
+ * - `package://<package name>/<subfolder>` to search using ament_index_cpp, using GetDirectoryPathFromPackage()
+ * - `file://<absolute path>` to refer to a path in the filesystem, using GetDirectoryPathFromFilesystem(). This will
+ *   resolve `~` to the user home directory. Note that paths starting with `/` will look like `file::///some/path`.
+ *
+ * @param url String containing any of the above formats for the directory path to look up
+ * @return Full path to the directory specified by the url
+ */
+std::filesystem::path GetDirectoryPath(const std::string& url);
+
+/**
+ * @brief Function that uses ament_index_cpp to get the package path of the given string.
+ *
+ * @param package_path String containing 'package_name/subfolder' for the directory path to look up
+ * @return Full path to the directory
+ */
+std::filesystem::path GetDirectoryPathFromPackage(const std::string& package_path);
+
+/**
+ * @brief Function that resolves filesystem paths, expanding `~` to the user home directory.
+ *
+ * @param parameter_value String containing a directory path to look up. The path may start with `~/` to refer to the user
+ * home directory.
  * @return Full path to the directory specified by the parameter_value
  */
-std::filesystem::path GetDirectoryPath(const std::string& parameter_value);
+std::filesystem::path GetDirectoryPathFromFilesystem(const std::filesystem::path& path);
 
 /**
  * @brief Function to load BehaviorTree xml files from a specific directory

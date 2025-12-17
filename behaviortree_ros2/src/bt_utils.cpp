@@ -53,16 +53,43 @@ btcpp_ros2_interfaces::msg::NodeStatus ConvertNodeStatus(BT::NodeStatus& status)
   return action_status;
 }
 
-std::filesystem::path GetDirectoryPath(const std::string& parameter_value)
+std::filesystem::path GetDirectoryPath(const std::string& url)
 {
-  const std::filesystem::path search_path(parameter_value);
+  static const std::string package_prefix = "package://";
+  static const std::string file_prefix = "file://";
+
+  if(url.rfind(package_prefix, 0) == 0)
+  {
+    const auto package_path = url.substr(package_prefix.length());
+    return GetDirectoryPathFromPackage(package_path);
+  }
+  else if(url.rfind(file_prefix, 0) == 0)
+  {
+    const auto file_path = url.substr(file_prefix.length());
+    return GetDirectoryPathFromFilesystem(file_path);
+  }
+  else
+  {
+    // Interpret unprefixed paths as package paths for backwards compatibility
+    RCLCPP_WARN(kLogger,
+                "Invalid/deprecated URL format: '%s'. Must start with either of ['%s', "
+                "'%s']. Will try to interpret as a package path.",
+                url.c_str(), package_prefix.c_str(), file_prefix.c_str());
+
+    return GetDirectoryPathFromPackage(url);
+  }
+}
+
+std::filesystem::path GetDirectoryPathFromPackage(const std::string& package_path)
+{
+  const std::filesystem::path search_path(package_path);
   const auto num_path_components = std::distance(search_path.begin(), search_path.end());
 
   if(num_path_components < 2)
   {
-    RCLCPP_ERROR(kLogger, "Invalid Parameter: %s. Missing subfolder delimiter '/'.",
-                 parameter_value.c_str());
-    return "";
+    RCLCPP_ERROR(kLogger, "Invalid package path: %s. Missing subfolder delimiter '/'.",
+                 package_path.c_str());
+    return {};
   }
 
   const auto package_name = *search_path.begin();
@@ -85,9 +112,23 @@ std::filesystem::path GetDirectoryPath(const std::string& parameter_value)
   return {};
 }
 
+std::filesystem::path GetDirectoryPathFromFilesystem(const std::filesystem::path& path)
+{
+  std::string path_str = path.string();
+  if((path_str.length() >= 2 && path_str.substr(0, 2) == "~/") || (path_str == "~"))
+  {
+    const std::string home_dir = getenv("HOME");
+    path_str.replace(0, 1, home_dir);
+    return std::filesystem::path(path_str);
+  }
+  return path;
+}
+
 void LoadBehaviorTrees(BT::BehaviorTreeFactory& factory,
                        const std::filesystem::path& directory_path)
 {
+  RCLCPP_DEBUG(kLogger, "Searching recursively for BehaviorTree XMLs in path: '%s'",
+               directory_path.c_str());
   using std::filesystem::recursive_directory_iterator;
   const auto directory_options =
       std::filesystem::directory_options::follow_directory_symlink;
@@ -164,14 +205,23 @@ void RegisterPlugins(bt_server::Params& params, BT::BehaviorTreeFactory& factory
     {
       continue;
     }
-
-    using std::filesystem::recursive_directory_iterator;
-    for(const auto& entry : recursive_directory_iterator(plugin_directory))
+    RCLCPP_DEBUG(kLogger, "Searching recursively for plugins in path: '%s'",
+                 plugin_directory.c_str());
+    try
     {
-      if(entry.path().extension() == ".so")
+      using std::filesystem::recursive_directory_iterator;
+      for(const auto& entry : recursive_directory_iterator(plugin_directory))
       {
-        LoadPlugin(factory, entry.path(), ros_params);
+        if(entry.path().extension() == ".so")
+        {
+          LoadPlugin(factory, entry.path(), ros_params);
+        }
       }
+    }
+    catch(const std::exception& e)
+    {
+      RCLCPP_ERROR(kLogger, "Failed to load plugins from '%s': %s",
+                   plugin_directory.c_str(), e.what());
     }
   }
 }
@@ -185,7 +235,15 @@ void RegisterBehaviorTrees(bt_server::Params& params, BT::BehaviorTreeFactory& f
     // skip invalid subtree directories
     if(tree_directory.empty())
       continue;
-    LoadBehaviorTrees(factory, tree_directory);
+    try
+    {
+      LoadBehaviorTrees(factory, tree_directory);
+    }
+    catch(const std::exception& e)
+    {
+      RCLCPP_ERROR(kLogger, "Failed to load BehaviorTrees from '%s': %s",
+                   tree_directory.c_str(), e.what());
+    }
   }
 }
 
