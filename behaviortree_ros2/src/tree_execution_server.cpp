@@ -225,6 +225,8 @@ void TreeExecutionServer::execute(
       {
         action_result->return_message = message;
       }
+      action_result->node_status.set__status(
+          btcpp_ros2_interfaces::msg::NodeStatus::FAILURE);
       RCLCPP_WARN(kLogger, action_result->return_message.c_str());
     };
 
@@ -232,7 +234,7 @@ void TreeExecutionServer::execute(
     {
       if(goal_handle->is_canceling())
       {
-        stop_action(status, "Action Server canceling and halting Behavior Tree");
+        stop_action(status, "Behavior tree execution aborted by client request");
         goal_handle->canceled(action_result);
         return;
       }
