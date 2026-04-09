@@ -161,6 +161,19 @@ public:
 
 private:
   bool createSubscriber(const std::string& topic_name);
+  std::optional<std::chrono::steady_clock::time_point> watchdog_start_;
+
+  bool hasTimedOut(uint32_t timeout_msec)
+  {
+    if(!watchdog_start_.has_value())
+    {
+      watchdog_start_ = std::chrono::steady_clock::now();
+    }
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now() - *watchdog_start_)
+                          .count();
+    return elapsed_ms >= static_cast<int64_t>(timeout_msec);
+  }
 };
 
 //----------------------------------------------------------------
@@ -320,6 +333,23 @@ inline NodeStatus RosTopicSubNode<T>::tick()
   };
   sub_instance_->callback_group_executor.spin_some();
   auto status = CheckStatus(onTick(last_msg_));
+
+  uint32_t timeout_msec = 0;
+  getInput("topic_data_timeout_msec", timeout_msec);
+
+  if(timeout_msec > 0)
+  {
+    if(last_msg_)
+    {
+      watchdog_start_.reset();
+      setOutput<bool>("has_timed_out", false);
+    }
+    else
+    {
+      setOutput<bool>("has_timed_out", hasTimedOut(timeout_msec));
+    }
+  }
+
   if(!latchLastMessage())
   {
     last_msg_.reset();
