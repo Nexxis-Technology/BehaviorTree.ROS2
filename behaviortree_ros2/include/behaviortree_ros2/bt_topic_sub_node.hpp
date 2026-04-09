@@ -116,8 +116,12 @@ public:
    */
   static PortsList providedBasicPorts(PortsList addition)
   {
-    PortsList basic = { InputPort<std::string>("topic_name", "__default__placeholder__",
-                                               "Topic name") };
+    PortsList basic = {
+      InputPort<std::string>("topic_name", "__default__placeholder__", "Topic name"),
+      InputPort<uint32_t>("topic_data_timeout_msec", 0,
+                          "Watchdog timeout in ms. 0 = disabled"),
+      OutputPort<bool>("has_timed_out", "True if no message received within timeout"),
+    };
     basic.insert(addition.begin(), addition.end());
     return basic;
   }
