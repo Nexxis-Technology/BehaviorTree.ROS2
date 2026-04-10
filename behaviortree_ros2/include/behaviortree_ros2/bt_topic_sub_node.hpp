@@ -119,7 +119,7 @@ public:
     PortsList basic = {
       InputPort<std::string>("topic_name", "__default__placeholder__", "Topic name"),
       InputPort<uint32_t>("topic_data_timeout_msec", 0,
-                          "Watchdog timeout in ms. 0 = disabled"),
+                          "no topic data timeout in ms. 0 = disabled"),
       OutputPort<bool>("has_timed_out", "True if no message received within timeout"),
     };
     basic.insert(addition.begin(), addition.end());
@@ -161,16 +161,12 @@ public:
 
 private:
   bool createSubscriber(const std::string& topic_name);
-  std::optional<std::chrono::steady_clock::time_point> watchdog_start_;
+  std::chrono::steady_clock::time_point last_message_received_time_;
 
   bool hasTimedOut(uint32_t timeout_msec)
   {
-    if(!watchdog_start_.has_value())
-    {
-      watchdog_start_ = std::chrono::steady_clock::now();
-    }
     auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                          std::chrono::steady_clock::now() - *watchdog_start_)
+                          std::chrono::steady_clock::now() - last_message_received_time_)
                           .count();
     return elapsed_ms >= static_cast<int64_t>(timeout_msec);
   }
@@ -300,6 +296,7 @@ inline bool RosTopicSubNode<T>::createSubscriber(const std::string& topic_name)
       [this](const std::shared_ptr<T> msg) { last_msg_ = msg; });
 
   topic_name_ = topic_name;
+  last_message_received_time_ = std::chrono::steady_clock::now();
   return true;
 }
 
@@ -337,18 +334,12 @@ inline NodeStatus RosTopicSubNode<T>::tick()
   uint32_t timeout_msec = 0;
   getInput("topic_data_timeout_msec", timeout_msec);
 
-  if(timeout_msec > 0)
+  if(last_msg_)
   {
-    if(last_msg_)
-    {
-      watchdog_start_.reset();
-      setOutput<bool>("has_timed_out", false);
-    }
-    else
-    {
-      setOutput<bool>("has_timed_out", hasTimedOut(timeout_msec));
-    }
+    last_message_received_time_ = std::chrono::steady_clock::now();
   }
+
+  setOutput<bool>("has_timed_out", timeout_msec > 0 && hasTimedOut(timeout_msec));
 
   if(!latchLastMessage())
   {
