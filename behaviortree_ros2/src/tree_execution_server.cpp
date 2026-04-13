@@ -273,8 +273,7 @@ void TreeExecutionServer::execute(
       const auto now = std::chrono::steady_clock::now();
       if(now < loop_deadline)
       {
-        p_->tree.sleep(std::chrono::duration_cast<std::chrono::system_clock::duration>(
-            loop_deadline - now));
+        std::this_thread::sleep_for(loop_deadline - now);
       }
       loop_deadline += period;
     }
