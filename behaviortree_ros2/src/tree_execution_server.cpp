@@ -230,6 +230,7 @@ void TreeExecutionServer::execute(
       RCLCPP_WARN(kLogger, action_result->return_message.c_str());
     };
 
+    bool has_loop_period_elapsed = true;
     while(rclcpp::ok() && status == BT::NodeStatus::RUNNING)
     {
       if(goal_handle->is_canceling())
@@ -245,9 +246,12 @@ void TreeExecutionServer::execute(
         status = BT::NodeStatus::RUNNING;
         RCLCPP_DEBUG(kLogger, "Action Server is paused, skipping tick.");
       }
-      else
+      else if(has_loop_period_elapsed)
       {
+        // Only tick tree when tick period has elapsed.
+        // If the loop is running slower than the tick frequency, the tree will be ticked at each loop iteration.
         status = p_->tree.tickExactlyOnce();
+        has_loop_period_elapsed = false;
       }
 
       if(const auto res = onLoopAfterTick(status); res.has_value())
@@ -273,9 +277,16 @@ void TreeExecutionServer::execute(
       const auto now = std::chrono::steady_clock::now();
       if(now < loop_deadline)
       {
-        std::this_thread::sleep_for(loop_deadline - now);
+        p_->tree.sleep(std::chrono::duration_cast<std::chrono::system_clock::duration>(
+            loop_deadline - now));
       }
-      loop_deadline += period;
+
+      // Check whether the sleeping finished because the period elapsed or because of a wakeup/interrupt (e.g. a cancel request)
+      if(std::chrono::steady_clock::now() >= loop_deadline)
+      {
+        has_loop_period_elapsed = true;
+        loop_deadline += period;
+      }
     }
   }
   catch(const std::exception& ex)
