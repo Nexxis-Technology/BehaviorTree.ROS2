@@ -234,7 +234,7 @@ void TreeExecutionServer::execute(
     {
       if(goal_handle->is_canceling())
       {
-        stop_action(status, "Abort of behavior tree execution was triggered.");
+        stop_action(status, "Behavior tree execution aborted.");
         goal_handle->canceled(action_result);
         return;
       }
