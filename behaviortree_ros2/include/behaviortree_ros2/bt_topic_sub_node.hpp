@@ -116,8 +116,12 @@ public:
    */
   static PortsList providedBasicPorts(PortsList addition)
   {
-    PortsList basic = { InputPort<std::string>("topic_name", "__default__placeholder__",
-                                               "Topic name") };
+    PortsList basic = {
+      InputPort<std::string>("topic_name", "__default__placeholder__", "Topic name"),
+      InputPort<uint32_t>("topic_data_timeout_msec", 0,
+                          "no topic data timeout in ms. 0 = disabled"),
+      OutputPort<bool>("has_timed_out", "True if no message received within timeout"),
+    };
     basic.insert(addition.begin(), addition.end());
     return basic;
   }
@@ -157,6 +161,15 @@ public:
 
 private:
   bool createSubscriber(const std::string& topic_name);
+  std::chrono::steady_clock::time_point last_message_received_time_;
+
+  bool hasTimedOut(uint32_t timeout_msec)
+  {
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now() - last_message_received_time_)
+                          .count();
+    return elapsed_ms >= static_cast<int64_t>(timeout_msec);
+  }
 };
 
 //----------------------------------------------------------------
@@ -283,6 +296,7 @@ inline bool RosTopicSubNode<T>::createSubscriber(const std::string& topic_name)
       [this](const std::shared_ptr<T> msg) { last_msg_ = msg; });
 
   topic_name_ = topic_name;
+  last_message_received_time_ = std::chrono::steady_clock::now();
   return true;
 }
 
@@ -316,6 +330,17 @@ inline NodeStatus RosTopicSubNode<T>::tick()
   };
   sub_instance_->callback_group_executor.spin_some();
   auto status = CheckStatus(onTick(last_msg_));
+
+  uint32_t timeout_msec = 0;
+  getInput("topic_data_timeout_msec", timeout_msec);
+
+  if(last_msg_)
+  {
+    last_message_received_time_ = std::chrono::steady_clock::now();
+  }
+
+  setOutput<bool>("has_timed_out", timeout_msec > 0 && hasTimedOut(timeout_msec));
+
   if(!latchLastMessage())
   {
     last_msg_.reset();
