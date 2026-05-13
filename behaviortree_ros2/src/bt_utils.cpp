@@ -205,6 +205,13 @@ void RegisterPlugins(bt_server::Params& params, BT::BehaviorTreeFactory& factory
     {
       continue;
     }
+    else if(!std::filesystem::exists(plugin_directory))
+    {
+      RCLCPP_WARN(kLogger, "The given search directory for plugins does not exist: '%s'",
+                  plugin_directory.c_str());
+      continue;
+    }
+
     RCLCPP_DEBUG(kLogger, "Searching recursively for plugins in path: '%s'",
                  plugin_directory.c_str());
     try
@@ -234,7 +241,16 @@ void RegisterBehaviorTrees(bt_server::Params& params, BT::BehaviorTreeFactory& f
     const auto tree_directory = GetDirectoryPath(tree_dir);
     // skip invalid subtree directories
     if(tree_directory.empty())
+    {
       continue;
+    }
+    else if(!std::filesystem::exists(tree_directory))
+    {
+      RCLCPP_WARN(kLogger, "The given search directory for BT XMLs does not exist: '%s'",
+                  tree_directory.c_str());
+      continue;
+    }
+
     try
     {
       LoadBehaviorTrees(factory, tree_directory);
