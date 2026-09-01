@@ -27,6 +27,9 @@
 
 #include "behaviortree_cpp/loggers/groot2_publisher.h"
 
+#include <std_srvs/srv/trigger.hpp>
+#include <std_msgs/msg/bool.hpp>
+
 namespace
 {
 static const auto kLogger = rclcpp::get_logger("bt_action_server");
@@ -42,6 +45,7 @@ struct TreeExecutionServer::Pimpl
 
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr pause_service;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr resume_service;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pause_state_publisher;
   bool paused = false;
 
   std::shared_ptr<bt_server::ParamListener> param_listener;
@@ -91,6 +95,10 @@ TreeExecutionServer::TreeExecutionServer(const rclcpp::Node::SharedPtr& node)
                                       Trigger::Response::SharedPtr response) {
         handle_resume(request, response);
       });
+
+  p_->pause_state_publisher = node_->create_publisher<std_msgs::msg::Bool>(
+      "pause_state", rclcpp::QoS(1).transient_local().reliable());
+  p_->pause_state_publisher->publish(std_msgs::msg::Bool().set__data(false));
 
   // we use a wall timer to run asynchronously executeRegistration();
   rclcpp::VoidCallbackType callback = [this]() {
@@ -319,6 +327,7 @@ void TreeExecutionServer::handle_pause(Trigger::Request::ConstSharedPtr /*reques
                                        Trigger::Response::SharedPtr response)
 {
   p_->paused = true;
+  p_->pause_state_publisher->publish(std_msgs::msg::Bool().set__data(p_->paused));
   response->success = true;
 }
 
@@ -326,6 +335,7 @@ void TreeExecutionServer::handle_resume(Trigger::Request::ConstSharedPtr /*reque
                                         Trigger::Response::SharedPtr response)
 {
   p_->paused = false;
+  p_->pause_state_publisher->publish(std_msgs::msg::Bool().set__data(p_->paused));
   response->success = true;
 }
 
