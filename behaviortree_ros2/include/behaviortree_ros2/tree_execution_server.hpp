@@ -192,6 +192,12 @@ private:
   void execute(const std::shared_ptr<GoalHandleExecuteTree> goal_handle);
 
   /**
+   * @brief Set the pause state object
+   * @param paused `true` to pause the action server, `false` to resume it
+   */
+  void set_pause_state(bool paused);
+
+  /**
    * @brief Handle the pause service request
    * @param request The request to pause the action server
    * @param response The response to the pause request
