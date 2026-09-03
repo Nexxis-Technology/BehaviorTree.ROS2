@@ -284,12 +284,14 @@ void TreeExecutionServer::execute(
       if(p_->paused)
       {
         auto feedback = std::make_shared<ExecuteTree::Feedback>();
+        feedback->paused = true;
         feedback->message = "Tree execution paused.";
         goal_handle->publish_feedback(feedback);
       }
       else if(const auto res = onLoopFeedback(); res.has_value())
       {
         auto feedback = std::make_shared<ExecuteTree::Feedback>();
+        feedback->paused = false;
         feedback->message = res.value();
         goal_handle->publish_feedback(feedback);
       }
