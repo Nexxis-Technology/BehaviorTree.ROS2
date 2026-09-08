@@ -20,12 +20,17 @@
 #include <thread>
 #endif
 
+#include <atomic>
+
 // auto-generated header, created by generate_parameter_library
 #include "behaviortree_ros2/bt_executor_parameters.hpp"
 #include "behaviortree_ros2/tree_execution_server.hpp"
 #include "behaviortree_ros2/bt_utils.hpp"
 
 #include "behaviortree_cpp/loggers/groot2_publisher.h"
+
+#include <std_srvs/srv/trigger.hpp>
+#include <std_msgs/msg/bool.hpp>
 
 namespace
 {
@@ -42,7 +47,9 @@ struct TreeExecutionServer::Pimpl
 
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr pause_service;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr resume_service;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pause_state_publisher;
   bool paused = false;
+  std::atomic<bool> tree_running{ false };
 
   std::shared_ptr<bt_server::ParamListener> param_listener;
   bt_server::Params params;
@@ -91,6 +98,10 @@ TreeExecutionServer::TreeExecutionServer(const rclcpp::Node::SharedPtr& node)
                                       Trigger::Response::SharedPtr response) {
         handle_resume(request, response);
       });
+
+  p_->pause_state_publisher = node_->create_publisher<std_msgs::msg::Bool>(
+      "pause_state", rclcpp::QoS(1).transient_local().reliable());
+  p_->pause_state_publisher->publish(std_msgs::msg::Bool().set__data(false));
 
   // we use a wall timer to run asynchronously executeRegistration();
   rclcpp::VoidCallbackType callback = [this]() {
@@ -160,6 +171,7 @@ rclcpp_action::CancelResponse TreeExecutionServer::handle_cancel(
                          "processing one.");
     return rclcpp_action::CancelResponse::REJECT;
   }
+  set_pause_state(false);
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
@@ -171,7 +183,7 @@ void TreeExecutionServer::handle_accepted(
   {
     p_->action_thread.join();
   }
-  p_->paused = false;
+  set_pause_state(false);  // Ensure pause state is reset before executing a new goal
   // To avoid blocking the executor start a new thread to process the goal
   p_->action_thread = std::thread{ [=]() { execute(goal_handle); } };
 }
@@ -181,6 +193,18 @@ void TreeExecutionServer::execute(
 {
   const auto goal = goal_handle->get_goal();
   BT::NodeStatus status = BT::NodeStatus::RUNNING;
+
+  p_->tree_running = true;
+  // Create RAII guard to ensure tree_running is set to false no matter how the function exits (normal return, exception, etc.)
+  struct TreeRunningGuard
+  {
+    std::atomic<bool>& flag;
+    ~TreeRunningGuard()
+    {
+      flag = false;
+    }
+  } guard{ p_->tree_running };
+
   auto action_result = std::make_shared<ExecuteTree::Result>();
 
   // Before executing check if we have new Behaviors or Subtrees to reload
@@ -260,12 +284,14 @@ void TreeExecutionServer::execute(
       if(p_->paused)
       {
         auto feedback = std::make_shared<ExecuteTree::Feedback>();
+        feedback->paused = true;
         feedback->message = "Tree execution paused.";
         goal_handle->publish_feedback(feedback);
       }
       else if(const auto res = onLoopFeedback(); res.has_value())
       {
         auto feedback = std::make_shared<ExecuteTree::Feedback>();
+        feedback->paused = false;
         feedback->message = res.value();
         goal_handle->publish_feedback(feedback);
       }
@@ -315,17 +341,43 @@ void TreeExecutionServer::execute(
   }
 }
 
+void TreeExecutionServer::set_pause_state(bool paused)
+{
+  if(p_->paused == paused)
+  {
+    return;
+  }
+  p_->paused = paused;
+  p_->pause_state_publisher->publish(std_msgs::msg::Bool().set__data(p_->paused));
+}
+
 void TreeExecutionServer::handle_pause(Trigger::Request::ConstSharedPtr /*request*/,
                                        Trigger::Response::SharedPtr response)
 {
-  p_->paused = true;
+  if(!p_->tree_running)
+  {
+    std::string msg = "Pause requested but no behavior tree is currently executing.";
+    RCLCPP_WARN(kLogger, msg.c_str());
+    response->message = msg;
+    response->success = false;
+    return;
+  }
+  set_pause_state(true);
   response->success = true;
 }
 
 void TreeExecutionServer::handle_resume(Trigger::Request::ConstSharedPtr /*request*/,
                                         Trigger::Response::SharedPtr response)
 {
-  p_->paused = false;
+  if(!p_->paused)
+  {
+    std::string msg = "Resume requested but the action server is not paused.";
+    RCLCPP_WARN(kLogger, msg.c_str());
+    response->message = msg;
+    response->success = true;
+    return;
+  }
+  set_pause_state(false);
   response->success = true;
 }
 

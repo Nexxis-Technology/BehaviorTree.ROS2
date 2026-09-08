@@ -14,5 +14,5 @@ string return_message
 ---
 #### Feedback ####
 
-#This can be customized by the user
+bool paused
 string message
