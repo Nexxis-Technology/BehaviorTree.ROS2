@@ -199,6 +199,9 @@ void TreeExecutionServer::execute(
   struct TreeRunningGuard
   {
     std::atomic<bool>& flag;
+
+    TreeRunningGuard(const TreeRunningGuard&) = delete;
+    TreeRunningGuard& operator=(const TreeRunningGuard&) = delete;
     ~TreeRunningGuard()
     {
       flag = false;
